@@ -38,7 +38,7 @@ The plugin replaces the WCS default notification scheduler with an extended subc
 woocommerce_scheduled_subscription_customer_notification_renewal_reminder
 ```
 
-This fires at the **midpoint** between the standard reminder and the actual renewal date. For example, if WCS is configured to send a reminder 6 days before renewal, the early reminder fires 9 days before renewal (halfway between day −12 and day −6).
+This fires at the **midpoint** between the standard reminder and the actual renewal date. For example, if WCS is configured to send a reminder 12 days before renewal, the reminder fires 6 days before renewal.
 
 By default the early reminder sends the same email as the standard renewal notification. Hook `woocommerce_subscription_customer_notification_renewal_reminder` to substitute a custom template (see [Hooks reference](#hooks-reference) below).
 

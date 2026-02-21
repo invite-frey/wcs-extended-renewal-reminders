@@ -49,6 +49,98 @@ function its_wcs_reminders_admin_notice_subscriptions_missing() {
 
 add_action( 'plugins_loaded', 'its_wcs_reminders_init', 5 );
 
+/**
+ * Secure Guest Payment for All Orders
+ * Uses auto-login approach with proper security checks
+ */
+
+// 1. Allow guest checkout globally
+add_filter('woocommerce_checkout_registration_required', '__return_false');
+
+// 2. Disable email verification globally
+add_filter('woocommerce_order_email_verification_required', '__return_false', 1);
+
+// 3. Auto-login guest users who have valid order key on payment page
+add_action('template_redirect', 'its_autologin_for_payment', 1);
+function its_autologin_for_payment() {
+    // Skip if already logged in
+    if (is_user_logged_in()) {
+        return;
+    }
+    
+    // Check if on order-pay endpoint with valid key
+    global $wp;
+    if (is_wc_endpoint_url('order-pay') && !empty($wp->query_vars['order-pay'])) {
+        $order_id = absint($wp->query_vars['order-pay']);
+        $order_key = isset($_GET['key']) ? wc_clean(wp_unslash($_GET['key'])) : '';
+        
+        if ($order_id && $order_key) {
+            $order = wc_get_order($order_id);
+            
+            // Verify order exists and key matches
+            if ($order && hash_equals($order->get_order_key(), $order_key)) {
+                $user_id = $order->get_customer_id();
+                
+                // Only auto-login if order has an associated user
+                if ($user_id && $user_id > 0) {
+                    wp_clear_auth_cookie();
+                    wp_set_current_user($user_id);
+                    wp_set_auth_cookie($user_id);
+                    
+                    // Redirect to same URL to reload with logged-in state
+                    wp_safe_redirect(remove_query_arg('wcs_redirect'));
+                    exit;
+                }
+            }
+        }
+    }
+    
+    // Also handle WCS redirect parameter
+    if (isset($_GET['wcs_redirect']) && $_GET['wcs_redirect'] === 'pay_for_order' && isset($_GET['wcs_redirect_id'])) {
+        $order_id = absint($_GET['wcs_redirect_id']);
+        $order = wc_get_order($order_id);
+        
+        if ($order) {
+            $user_id = $order->get_customer_id();
+            
+            if ($user_id && $user_id > 0) {
+                wp_clear_auth_cookie();
+                wp_set_current_user($user_id);
+                wp_set_auth_cookie($user_id);
+                
+                // Redirect to payment URL
+                wp_safe_redirect($order->get_checkout_payment_url());
+                exit;
+            }
+        }
+    }
+}
+
+// 4. Also auto-login on thank you page (for continuity)
+add_action('template_redirect', 'its_autologin_on_thankyou', 1);
+function its_autologin_on_thankyou() {
+    if (is_user_logged_in() || !is_wc_endpoint_url('order-received')) {
+        return;
+    }
+    
+    if (empty($_GET['key'])) {
+        return;
+    }
+    
+    $order_id = wc_get_order_id_by_order_key(wc_clean(wp_unslash($_GET['key'])));
+    $order = wc_get_order($order_id);
+    
+    if ($order) {
+        $user_id = $order->get_customer_id();
+        
+        if ($user_id && $user_id > 0) {
+            wp_clear_auth_cookie();
+            wp_set_current_user($user_id);
+            wp_set_auth_cookie($user_id);
+        }
+    }
+}
+
 function its_wcs_reminders_init() {
 
     if ( ! function_exists( 'WC' ) || ! class_exists( 'WooCommerce' ) ) {
